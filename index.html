@@ -841,6 +841,33 @@ function setPortrait(el,card){
 /* ================= HELPERS ================= */
 const $=(q,r)=>(r||document).querySelector(q);
 const $$=(q,r)=>Array.from((r||document).querySelectorAll(q));
+/* ===== NON-TEXT SOURCES ==================================================
+   The 2027 exam requires students to read charts, maps and images: SAQ 3 is
+   always a non-text source and MCQ sets use them constantly. We draw these
+   ourselves as inline SVG rather than hotlinking pictures, so they are
+   original work, need no network, and stay legible on a phone.
+   Attach one to any stimulus or DBQ document with a `viz` object:
+     viz:{t:'TITLE', rows:[['label', number, 'displayed value'], ...],
+          note:'optional footnote'}
+========================================================================= */
+function chartSVG(v){
+  if(!v||!v.rows||!v.rows.length) return '';
+  const rows=v.rows;
+  const max=Math.max.apply(null,rows.map(function(r){ return r[1]; }))||1;
+  const W=320, labelW=92, barX=labelW+4, valW=54, barW=W-barX-valW;
+  const rh=24, top=v.t?24:4, h=top+rows.length*rh+(v.note?18:4);
+  let s='<svg viewBox="0 0 '+W+' '+h+'" role="img" aria-label="'+esc(v.t||'data source')+'" style="width:100%;height:auto;margin-top:10px;display:block">';
+  if(v.t) s+='<text x="0" y="11" font-size="10.5" font-family="\'JetBrains Mono\',monospace" letter-spacing=".08em" fill="#0a3161">'+esc(String(v.t).toUpperCase())+'</text>';
+  rows.forEach(function(r,i){
+    const y=top+i*rh, bw=Math.max(2,r[1]/max*barW), last=i===rows.length-1;
+    s+='<text x="0" y="'+(y+12)+'" font-size="11" fill="#3a352f">'+esc(r[0])+'</text>';
+    s+='<rect x="'+barX+'" y="'+(y+2)+'" width="'+bw.toFixed(1)+'" height="12" rx="2" fill="'+(last?'#b31942':'#0a3161')+'" opacity="'+(0.55+0.45*(r[1]/max)).toFixed(2)+'"/>';
+    s+='<text x="'+(barX+bw+4).toFixed(1)+'" y="'+(y+12)+'" font-size="10.5" font-family="\'JetBrains Mono\',monospace" fill="#3a352f">'+esc(String(r[2]!==undefined?r[2]:r[1]))+'</text>';
+  });
+  if(v.note) s+='<text x="0" y="'+(h-4)+'" font-size="10" fill="#6b6259">'+esc(v.note)+'</text>';
+  return s+'</svg>';
+}
+
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function stars(n){return '★'.repeat(n)+'☆'.repeat(Math.max(0,6-n));}
@@ -1001,9 +1028,9 @@ function qaRun(){
   if(!dupC.length&&!dupL.length) add('OK','ids',TOPICS.length+' lessons and '+CARDS.length+' cards, all uniquely keyed.');
   const thin=TOPICS.filter(function(t){ return t.qs.length<2; }).map(function(t){ return t.code; });
   if(thin.length) add('WARN','question-coverage','Lessons with fewer than 2 questions: '+thin.join(', '));
-  const badSet=DBQ_SETS.filter(function(d){ return d.docs.length!==6||d.hipp.length!==6; }).length;
+  const badSet=DBQ_SETS.filter(function(d){ return d.docs.length!==7||d.hipp.length!==6; }).length;
   if(badSet) add('ERROR','dbq-sets',badSet+' DBQ set(s) do not have 6 documents and 6 HIPP items.');
-  else add('OK','dbq-sets',DBQ_SETS.length+' DBQ sets, each with 6 documents and 6 HIPP items.');
+  else add('OK','dbq-sets',DBQ_SETS.length+' DBQ sets, each with 7 documents and 6 HIPP items.');
 
   return R;
 }
@@ -1106,7 +1133,7 @@ function renderQuestion(){
   '<span>Q '+(quiz.i+1)+' / '+quiz.order.length+'</span>'+(S.timed?'<span class="pill" id="qtimer">60s</span>':'')+'<span class="pill">'+COIN+' '+S.coins+'</span></div>';
   h+='<div class="panel">';
   h+='<div style="font-family:\'JetBrains Mono\',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--rust);margin-bottom:8px">'+esc(item.t.code)+' · '+esc(item.t.name)+'</div>';
-  if(q.st)h+='<div class="stimulus"><p>'+esc(q.st.t)+'</p><span class="src">— '+esc(q.st.s)+'</span></div>';
+  if(q.st)h+='<div class="stimulus"><p>'+esc(q.st.t)+'</p>'+(q.st.viz?chartSVG(q.st.viz):'')+'<span class="src">— '+esc(q.st.s)+'</span></div>';
   h+='<div class="qtext">'+esc(q.q)+'</div>';
   choices.forEach((ch,i)=>{h+='<button class="choice" data-ok="'+(ch.ok?1:0)+'">'+esc(ch.c)+'</button>';});
   h+='<div id="feedback"></div></div>';
@@ -1342,7 +1369,7 @@ function renderStudyHub(){
     const saq=SAQS.find(s=>s.p===p.n);
     if(saq){
       body+='<div class="study-sec" style="padding:10px 0"><b style="color:var(--ink)">📝 SAQ Practice (2027 format — '+saq.label+')</b>';
-      body+='<div class="stimulus" style="margin-top:8px"><p>'+saq.src+'</p><span class="src">— '+esc(saq.attr)+'</span></div>';
+      body+='<div class="stimulus" style="margin-top:8px"><p>'+saq.src+'</p>'+(saq.viz?chartSVG(saq.viz):'')+'<span class="src">— '+esc(saq.attr)+'</span></div>';
       ['a','b','c'].forEach(k=>{
         body+='<p style="font-size:14.5px;line-height:1.5;margin-top:8px"><b>('+k+')</b> '+esc(saq[k])+'</p>'+
         '<textarea class="saq-box" rows="3" placeholder="Type your answer (practice only — not saved)…"></textarea>';
@@ -1394,7 +1421,7 @@ function renderStudyHub(){
 const DBQ_RUBRIC=[
 'Thesis (1 pt): a historically defensible claim answering \u201cto what extent,\u201d with a line of reasoning \u2014 not a restatement of the prompt.',
 'Contextualization (1 pt): situates the prompt in broader relevant developments before or during the period.',
-'Evidence from documents (1 pt): accurately uses the content of at least TWO documents to support an argument.',
+'Evidence from documents (1 pt): accurately describes the content of at least THREE documents.',
 'Evidence from documents (+1 pt): accurately supports arguments with at least FOUR documents.',
 'Outside evidence (1 pt): a specific, relevant fact NOT found in the documents.',
 'Analysis/Sourcing (1 pt): for at least TWO documents, explains how point of view, purpose, situation, or audience matters.',
@@ -1407,7 +1434,7 @@ const DBQ_DOCS=[
 {id:3,attr:'Adapted from the Omaha Platform of the People\u2019s Party, 1892',txt:'The fruits of the toil of millions are boldly stolen to build up colossal fortunes for a few. We demand that the railroads be owned by the people and that the currency be freed from the bankers\u2019 grip.',grp:3,hipp:'A third-party platform written to rally farmers and laborers \u2014 its purpose is mobilization, so it names villains and demands remedies.'},
 {id:4,attr:'Data adapted from U.S. industrial statistics',txt:'Railroad track in operation: 1865 \u2014 35,000 miles; 1898 \u2014 about 190,000 miles.<br>Steel production: 1865 \u2014 under 20,000 tons; 1898 \u2014 nearly 9 million tons.',grp:1,hipp:'Compiled statistics with no author\u2019s argument \u2014 neutral evidence of scale that any side can enlist.'},
 {id:5,attr:'Adapted from Jacob Riis, How the Other Half Lives, 1890',txt:'In the tenements a dozen sleep where four should; the sun is a stranger and the rent collector is not. The other half lives in the shadow of the mills that made this city rich.',grp:2,hipp:'A reformer-journalist using vivid description to move comfortable readers toward housing reform.'},
-{id:6,attr:'Adapted from Jane Addams on the founding of Hull House, 1892',txt:'We opened the house believing that the good of the city\u2019s poorest and the good of its most comfortable are one and the same, and that charity must give way to justice.',grp:3,hipp:'A settlement founder explaining her mission to win supporters \u2014 framing reform as justice, not charity.'}];
+{id:6,attr:'Adapted from Jane Addams on the founding of Hull House, 1892',txt:'We opened the house believing that the good of the city\u2019s poorest and the good of its most comfortable are one and the same, and that charity must give way to justice.',grp:3,hipp:'A settlement founder explaining her mission to win supporters \u2014 framing reform as justice, not charity.'},{id:7,attr:'Recorded strikes and lockouts in the United States, adapted from federal labor reports',txt:'Federal labor reports counting work stoppages during the industrial decades.',grp:3,hipp:'Counts kept by the government to monitor unrest — they measure how workers answered industrialization, not how employers described it.',viz:{t:'Recorded strikes and lockouts',rows:[['1881',477,'477'],['1886',1572,'1,572'],['1894',1404,'1,404'],['1898',1098,'1,098']],note:'1886 included the Great Southwest Strike and Haymarket.'}}];
 const HIPP_ITEMS=[
 {d:0,q:'The author\u2019s point of view most shapes Document 1 in that he',ch:['celebrates an industrial order in which he holds a leading stake','criticizes the railroads for their reckless expansion westward','speaks for factory workers seeking shorter hours and higher pay','urges a return to an agricultural economy of small family farms'],ex:'Carnegie is steel\u2019s greatest beneficiary \u2014 the triumphal tone advertises the system that enriched him.'},
 {d:1,q:'The intended audience most shapes Document 2 because the speaker is',ch:['addressing senators who could translate his grievances into law','entertaining newspaper readers with colorful factory stories','reporting privately to his employer on conditions in the mill','recruiting new members into a secret labor brotherhood'],ex:'Before a Senate committee, personal hardship becomes evidence aimed at lawmakers who can act.'},
@@ -1425,7 +1452,7 @@ docs:[
 {id:3,attr:'Adapted from a letter of a Spanish encomendero to the crown, 1550s',txt:'These grants of Indian labor are the just reward of conquest. Without our tribute and our mines the colony fails \u2014 and without our instruction the Indians remain outside the Church.',grp:2,hipp:'A grant-holder defending the system that enriches him, wrapping self-interest in the language of duty and faith.'},
 {id:4,attr:'Adapted from a Nahua account of the epidemic in Tenochtitlan, recorded in the Florentine Codex',txt:'A great plague spread over us. Sores covered the people from head to foot; none could move, and many died of hunger, for none were left well enough to tend the others.',grp:1,hipp:'A Native voice recording the epidemic from inside \u2014 rare testimony of how disease dissolved daily life itself.'},
 {id:5,attr:'Adapted from a Spanish friar\u2019s report from New Mexico, c. 1600',txt:'They attend the mass, yet in the kivas the old dances continue. They take of our faith what serves them and keep what is their own.',grp:3,hipp:'A frustrated missionary documenting religious blending \u2014 evidence that conversion was negotiated, not imposed whole.'},
-{id:6,attr:'Adapted from an early trader\u2019s journal on the Atlantic coast, c. 1605',txt:'They will not part with furs except for iron hatchets and kettles, and these they cut and rework into forms of their own devising, for uses we did not intend.',grp:3,hipp:'A trader observing Native peoples steering exchange to their own purposes \u2014 adaptation on Native terms.'}],
+{id:6,attr:'Adapted from an early trader\u2019s journal on the Atlantic coast, c. 1605',txt:'They will not part with furs except for iron hatchets and kettles, and these they cut and rework into forms of their own devising, for uses we did not intend.',grp:3,hipp:'A trader observing Native peoples steering exchange to their own purposes \u2014 adaptation on Native terms.'},{id:7,attr:'Estimates of enslaved Africans disembarked in the Spanish Americas, compiled from modern voyage databases',txt:'A modern compilation of shipping records, counting captives landed in Spanish American ports.',grp:2,hipp:'Compiled long after the fact from ships’ records — it measures the Atlantic labor system replacing the Native workforce that disease destroyed.',viz:{t:'Enslaved Africans landed, Spanish America',rows:[['1501–1525',13,'about 13,000'],['1526–1550',26,'about 26,000'],['1551–1575',48,'about 48,000'],['1576–1600',123,'about 123,000']],note:'Figures are estimates drawn from surviving voyage records.'}}],
 hipp:[
 {d:0,q:'The purpose of Document 1 is best described as an effort to',ch:['move the crown to reform the treatment of Native laborers','celebrate the wealth that colonial mines sent to Spain','recruit new colonists for the encomienda system','record neutral statistics on colonial production'],ex:'Las Casas wrote to power \u2014 exposure in service of reform, not description for its own sake.'},
 {d:1,q:'Document 2 is most useful to historians as',ch:['a measure of the scale of Native demographic collapse','an eyewitness account of a single epidemic outbreak','proof that colonization caused no lasting change','a defense of Spanish labor policy in the mines'],ex:'The numbers quantify catastrophe \u2014 modern estimates giving scale to what narratives describe.'},
@@ -1441,7 +1468,7 @@ docs:[
 {id:3,attr:'Adapted from the Virginia slave code, 1705',txt:'All servants imported who were not Christians in their native country shall be accounted slaves, and as such be here bought and sold notwithstanding a conversion to Christianity afterward.',grp:1,hipp:'Law fixing slavery as permanent and racial \u2014 the colony writing its labor system into statute.'},
 {id:4,attr:'Adapted from a promotional tract for Pennsylvania, c. 1700',txt:'Here the German, the Swede, and the English live side by side; the Quaker, the Lutheran, and the Baptist worship each in his own way, and none is molested for conscience.',grp:2,hipp:'An advertisement written to attract settlers \u2014 tolerance is the selling point, so diversity is celebrated.'},
 {id:5,attr:'Adapted from the Navigation Acts, 1660',txt:'No goods shall be imported into or exported out of the colonies but in English ships\u2026 and the enumerated commodities \u2014 sugar, tobacco, indigo \u2014 shall be carried only to England.',grp:3,hipp:'Imperial law binding every region into one mercantilist system \u2014 whatever their differences, all colonies traded under these rules.'},
-{id:6,attr:'Adapted from a Boston merchant\u2019s letter to a London partner, 1740s',txt:'Our ships carry fish to the Indies and rum to the coast, but every voyage begins and ends in your credit. We reckon in sterling, dress in your cloth, and drink to the King.',grp:3,hipp:'A colonial merchant describing dependence on London credit and culture \u2014 evidence of a shared Anglo-Atlantic world.'}],
+{id:6,attr:'Adapted from a Boston merchant\u2019s letter to a London partner, 1740s',txt:'Our ships carry fish to the Indies and rum to the coast, but every voyage begins and ends in your credit. We reckon in sterling, dress in your cloth, and drink to the King.',grp:3,hipp:'A colonial merchant describing dependence on London credit and culture \u2014 evidence of a shared Anglo-Atlantic world.'},{id:7,attr:'Enslaved people as a share of population by region, c. 1750, adapted from colonial census returns',txt:'Colonial population returns, gathered by region on the eve of the imperial wars.',grp:1,hipp:'Counts taken for taxation and militia purposes — the same English empire produced radically different labor systems by climate and crop.',viz:{t:'Enslaved share of population, c. 1750',rows:[['New England',3,'about 3%'],['Middle colonies',7,'about 7%'],['Chesapeake',40,'about 40%'],['Lower South',61,'about 61%']],note:'Shares are approximate and varied sharply within each region.'}}],
 hipp:[
 {d:0,q:'The intended audience most shapes Document 1 because Winthrop is',ch:['binding fellow migrants to a shared covenant before landing','petitioning the king for a new colonial charter','warning English officials against further migration','advertising Massachusetts to prospective investors'],ex:'A sermon to the migrating community itself \u2014 unity and mission are the message.'},
 {d:1,q:'The purpose of Document 2 is best understood as an effort to',ch:['justify a labor investment to the merchant financing it','condemn the spread of slavery in the Chesapeake','recruit indentured servants from English ports','describe New England\u2019s shipping economy'],ex:'Written to a creditor, the letter frames enslaved labor as a sound investment \u2014 economics drives the argument.'},
@@ -1457,7 +1484,7 @@ docs:[
 {id:3,attr:'Adapted from Abigail Adams to John Adams, 1776',txt:'In the new code of laws, remember the ladies\u2026 Do not put such unlimited power into the hands of the husbands. Remember, all men would be tyrants if they could.',grp:3,hipp:'A private letter turning revolutionary language on the household \u2014 playful in tone, radical in implication.'},
 {id:4,attr:'Adapted from a petition of enslaved men to the Massachusetts legislature, 1777',txt:'We have in common with all other men a natural and unalienable right to that freedom which the great Parent of the Universe hath bestowed equally on all mankind.',grp:3,hipp:'Enslaved petitioners quoting the Revolution\u2019s own creed back at it \u2014 the argument for liberty made unanswerable.'},
 {id:5,attr:'Adapted from remarks of a convention delegate on the franchise, 1787',txt:'The people should have as little to do as may be about the government. Give the votes to those with property, for they alone have a stake steady enough to be trusted with it.',grp:2,hipp:'An elite delegate\u2019s fear of \u201cthe mob\u201d \u2014 evidence that the founders\u2019 republic kept deliberate limits on democracy.'},
-{id:6,attr:'Adapted from a message of a Native leader to United States commissioners, 1780s',txt:'You claim our country by conquest of the King. We were not conquered. The King had no right to give what was never his, and we will not quit our lands for lines drawn in Paris.',grp:2,hipp:'A Native diplomat rejecting the Treaty of Paris \u2014 for Native nations the Revolution changed the flag, not the dispossession.'}],
+{id:6,attr:'Adapted from a message of a Native leader to United States commissioners, 1780s',txt:'You claim our country by conquest of the King. We were not conquered. The King had no right to give what was never his, and we will not quit our lands for lines drawn in Paris.',grp:2,hipp:'A Native diplomat rejecting the Treaty of Paris \u2014 for Native nations the Revolution changed the flag, not the dispossession.'},{id:7,attr:'Free Black population of the United States, adapted from federal census returns',txt:'Federal census returns across the revolutionary and early national decades.',grp:3,hipp:'Government counts, not advocacy — the numbers show revolutionary ideals producing gradual emancipation in the North while slavery expanded elsewhere.',viz:{t:'Free Black population, United States',rows:[['1770',40,'about 40,000'],['1790',59,'59,000'],['1800',108,'108,000'],['1810',186,'186,000']],note:'Growth concentrated in the North and Upper South.'}}],
 hipp:[
 {d:0,q:'The intended audience of Document 1 most shapes it because the Declaration was written to',ch:['justify independence before \u201ca candid world\u201d of nations','instruct state legislatures on drafting constitutions','persuade Parliament to repeal specific taxes','settle boundary disputes among the colonies'],ex:'The Declaration argues to the world \u2014 hence sweeping principles rather than legal detail.'},
 {d:1,q:'Document 2 best supports which claim about the Revolution\u2019s effects?',ch:['Republican principles shaped the terms of national expansion','The Confederation lacked authority over western lands','Slavery was abolished throughout the new nation','New states entered as permanent colonial dependencies'],ex:'Equal statehood plus a free-soil line \u2014 ideals written into the mechanics of expansion.'},
@@ -1473,7 +1500,7 @@ docs:[
 {id:3,attr:'Adapted from a temperance society tract, 1836',txt:'The drunkard\u2019s wages feed the tavern and starve the child. Sign the pledge, and the wages of a sober republic will build the school and the church in place of the jail.',grp:2,hipp:'A tract written to persuade ordinary readers \u2014 linking private habits to the fate of the republic itself.'},
 {id:4,attr:'William Lloyd Garrison, first issue of The Liberator, 1831',txt:'I am in earnest \u2014 I will not equivocate \u2014 I will not excuse \u2014 I will not retreat a single inch \u2014 AND I WILL BE HEARD.',grp:1,hipp:'An immediatist announcing a new, uncompromising abolitionism \u2014 tone itself is the argument.'},
 {id:5,attr:'Adapted from an editorial in a northern newspaper, 1835',txt:'These fanatics of abolition would dissolve the Union to free the slave. Respectable men of both sections must silence them, by law where possible and by firmer means where not.',grp:3,hipp:'A hostile northern editor \u2014 evidence that backlash against reform was national, not merely southern.'},
-{id:6,attr:'Adapted from the Memorial of the Cherokee Nation, 1830',txt:'We wish to remain on the land of our fathers. We have a perfect and original right to remain without interruption. The treaties with us are sacred, or the honor of the United States is nothing.',grp:3,hipp:'A nation petitioning in the language of American law and honor \u2014 while the government it petitioned prepared removal.'}],
+{id:6,attr:'Adapted from the Memorial of the Cherokee Nation, 1830',txt:'We wish to remain on the land of our fathers. We have a perfect and original right to remain without interruption. The treaties with us are sacred, or the honor of the United States is nothing.',grp:3,hipp:'A nation petitioning in the language of American law and honor \u2014 while the government it petitioned prepared removal.'},{id:7,attr:'Estimated annual alcohol consumption per adult, adapted from federal excise and production data',txt:'Production and excise records used to estimate what the average adult drank each year.',grp:2,hipp:'Compiled from tax and production records rather than reformers’ claims — useful for judging whether moral reform actually changed behavior.',viz:{t:'Absolute alcohol per adult, per year',rows:[['1830',71,'about 7.1 gal.'],['1840',31,'about 3.1 gal.'],['1850',21,'about 2.1 gal.']],note:'Measured in gallons of pure alcohol, not gallons of beverage.'}}],
 hipp:[
 {d:0,q:'The rhetorical strategy of Document 1 is best described as',ch:['claiming the founding creed for women by echoing its form','rejecting the Declaration of Independence as outdated','appealing to religious authority over natural rights','petitioning Congress for gradual legal reform'],ex:'Copying Jefferson\u2019s structure indicts the nation by its own words.'},
 {d:1,q:'Document 2 best explains which connection?',ch:['revivalist perfectionism supplying the energy of reform','the separation of churches from all political causes','the decline of religious enthusiasm after 1820','clerical opposition to the temperance movement'],ex:'If people can choose salvation, society can be perfected \u2014 revival becomes reform.'},
@@ -1489,7 +1516,7 @@ docs:[
 {id:3,attr:'Adapted from South Carolina\u2019s Declaration of the Causes of Secession, 1860',txt:'A geographical line has been drawn across the Union, and a party has elected a man whose opinions and purposes are hostile to slavery. The slaveholding states can no longer remain in safety.',grp:1,hipp:'Secessionists naming their own cause \u2014 the document places slavery, not tariffs, at the center.'},
 {id:4,attr:'Abraham Lincoln, \u201cHouse Divided\u201d speech, 1858',txt:'A house divided against itself cannot stand. I believe this government cannot endure permanently half slave and half free\u2026 It will become all one thing, or all the other.',grp:2,hipp:'A politician arguing the middle ground had collapsed \u2014 compromise itself was no longer a stable position.'},
 {id:5,attr:'Adapted from an editorial in a southern commercial journal, 1851',txt:'The tariff robs the planter to fatten the northern mill. Our quarrel is with a system that makes the South a colony of Boston and New York, paying tribute in every bale we ship.',grp:3,hipp:'A commercial editor casting the conflict as economic exploitation \u2014 grievance framed in bales and duties.'},
-{id:6,attr:'Data adapted from U.S. census and trade statistics',txt:'Cotton exports: 1840 \u2014 about $64 million; 1860 \u2014 about $192 million.<br>Enslaved population: 1840 \u2014 2.5 million; 1860 \u2014 nearly 4 million.',grp:3,hipp:'Numbers measuring the stake \u2014 an economy and labor system growing, not fading, on the eve of war.'}],
+{id:6,attr:'Data adapted from U.S. census and trade statistics',txt:'Cotton exports: 1840 \u2014 about $64 million; 1860 \u2014 about $192 million.<br>Enslaved population: 1840 \u2014 2.5 million; 1860 \u2014 nearly 4 million.',grp:3,hipp:'Numbers measuring the stake \u2014 an economy and labor system growing, not fading, on the eve of war.'},{id:7,attr:'Results of the presidential election of 1860, adapted from official returns',txt:'Official returns from the four-way presidential contest of 1860.',grp:2,hipp:'Official tallies — a president elected by one section alone measures how completely the national parties had broken apart.',viz:{t:'Electoral votes, 1860',rows:[['Lincoln',180,'180'],['Breckinridge',72,'72'],['Bell',39,'39'],['Douglas',12,'12']],note:'Lincoln won with about 40% of the popular vote and no southern states.'}}],
 hipp:[
 {d:0,q:'The point of view of Document 1 most shapes it in that the speaker opposes slavery\u2019s expansion',ch:['on behalf of white free labor rather than enslaved people','out of commitment to immediate and complete abolition','to protect the profits of southern cotton planters','because the Constitution required free territories'],ex:'Free-soil politics centered white workingmen \u2014 a broader, and more limited, coalition than abolition.'},
 {d:1,q:'Document 2 destroyed the ground for compromise because it held that',ch:['Congress could not bar slavery from any territory','popular sovereignty would decide each territory','the Missouri Compromise line remained binding','enslaved people became free in free states'],ex:'If Congress was powerless, every compromise position \u2014 and the Republican platform \u2014 was unconstitutional.'},
@@ -1505,7 +1532,7 @@ docs:[
 {id:3,attr:'Adapted from the surrender speech attributed to Chief Joseph of the Nez Perce, 1877',txt:'Our chiefs are killed\u2026 The little children are freezing to death. Hear me, my chiefs! I am tired. My heart is sick and sad. From where the sun now stands I will fight no more forever.',grp:2,hipp:'A leader\u2019s surrender after a 1,400-mile fighting retreat \u2014 exhaustion and grief recorded at the moment of defeat.'},
 {id:4,attr:'Adapted from an agent\u2019s report on the Ghost Dance, 1890',txt:'They dance in circles for days, believing the earth will be made new, the buffalo return, and the dead live again. It is not war they preach, but hope \u2014 yet the settlers demand troops.',grp:2,hipp:'An observer distinguishing a religion of hope from the armed threat settlers imagined \u2014 written weeks before Wounded Knee.'},
 {id:5,attr:'Adapted from a Kansas homesteader\u2019s letter, 1878',txt:'We have proved up our claim \u2014 160 acres of our own, which no landlord in the old country could ever have promised. But the grasshoppers took one crop and the drought another, and the railroad takes its share of all the rest.',grp:3,hipp:'A settler weighing free land against nature and railroad rates \u2014 opportunity and dependence in one paragraph.'},
-{id:6,attr:'Adapted from a railroad land-department advertisement, 1875',txt:'MILLIONS OF ACRES of the finest farming land in the world, on ten years\u2019 credit! Schools, churches, and markets follow the rails. Come west and grow up with the country!',grp:3,hipp:'A corporation selling its land grant \u2014 promotional purpose explains the paradise it promises.'}],
+{id:6,attr:'Adapted from a railroad land-department advertisement, 1875',txt:'MILLIONS OF ACRES of the finest farming land in the world, on ten years\u2019 credit! Schools, churches, and markets follow the rails. Come west and grow up with the country!',grp:3,hipp:'A corporation selling its land grant \u2014 promotional purpose explains the paradise it promises.'},{id:7,attr:'Land held by Native nations, adapted from federal Indian Office reports',txt:'Acreage reported by the federal Indian Office before and after allotment began.',grp:1,hipp:'Produced by the agency carrying out the policy — the government’s own accounting of what allotment cost Native nations.',viz:{t:'Land held by Native nations (millions of acres)',rows:[['1881',155,'about 155'],['1890',104,'about 104'],['1900',78,'about 78']],note:'The Dawes Act took effect in 1887.'}}],
 hipp:[
 {d:0,q:'The stated method of Document 1 for transforming Native life was to',ch:['replace tribal landholding with individual private allotments','expand the reservations guaranteed by earlier treaties','restore the buffalo herds on the northern plains','transfer all western lands to state governments'],ex:'Allotment aimed at the tribe itself \u2014 dissolving communal land into private property.'},
 {d:1,q:'The point of view of Document 2 is best described as that of',ch:['an assimilationist who saw cultural erasure as benevolence','a reformer defending the preservation of Native languages','a military officer urging renewed warfare on the plains','a critic demanding the closure of the boarding schools'],ex:'Pratt believed he was saving individuals \u2014 by destroying the culture that made them a people.'},
@@ -1521,7 +1548,7 @@ docs:[
 {id:3,attr:'Adapted from a speech of a Liberty League spokesman, 1936',txt:'This administration has substituted the whims of bureaus for the rule of law. It taxes thrift to subsidize idleness, and calls regimentation recovery. The Constitution was not suspended by the Depression.',grp:2,hipp:'Business conservatives organizing against the New Deal \u2014 constitutional language deployed in defense of property.'},
 {id:4,attr:'Adapted from the Supreme Court\u2019s reasoning in Schechter Poultry Corp. v. United States, 1935',txt:'Extraordinary conditions do not create or enlarge constitutional power. Congress cannot delegate its legislative authority to the Executive, nor reach transactions that are not interstate commerce.',grp:2,hipp:'The Court striking down the NRA \u2014 the constitutional ceiling the early New Deal kept hitting.'},
 {id:5,attr:'Unemployment data, U.S. Bureau of Labor statistics (adapted)',txt:'Unemployment rate:<br>1933 \u2014 about 25%<br>1937 \u2014 about 14%<br>1939 \u2014 about 17%<br>1944 \u2014 about 1%',grp:3,hipp:'The numbers show partial recovery, relapse in 1937, and full employment only with war production \u2014 measuring the New Deal\u2019s limits.'},
-{id:6,attr:'Adapted from a historian\u2019s assessment of the New Deal (secondary source)',txt:'Much that seemed revolutionary in 1933 had been rehearsed for a generation: the regulatory commissions, the labor standards, the social insurance schemes of the Progressives. Roosevelt nationalized an existing reform tradition.',grp:3,hipp:'A scholar arguing continuity \u2014 the New Deal as the Progressive era\u2019s heir rather than a clean break.'}],
+{id:6,attr:'Adapted from a historian\u2019s assessment of the New Deal (secondary source)',txt:'Much that seemed revolutionary in 1933 had been rehearsed for a generation: the regulatory commissions, the labor standards, the social insurance schemes of the Progressives. Roosevelt nationalized an existing reform tradition.',grp:3,hipp:'A scholar arguing continuity \u2014 the New Deal as the Progressive era\u2019s heir rather than a clean break.'},{id:7,attr:'Union membership in the United States, adapted from federal labor statistics',txt:'Federal labor statistics on union membership across the New Deal years.',grp:1,hipp:'Routine government statistics — they measure whether a change in federal law actually shifted power on the shop floor.',viz:{t:'Union membership (millions)',rows:[['1933',29,'about 2.9'],['1937',72,'about 7.2'],['1940',87,'about 8.7'],['1945',143,'about 14.3']],note:'The Wagner Act became law in 1935.'}}],
 hipp:[
 {d:0,q:'The rhetorical strategy of Document 1 is best described as',ch:['framing the Depression as a war requiring government mobilization','promising to shrink federal power once markets recovered','blaming state governments for the economic collapse','announcing strict adherence to balanced budgets'],ex:'War language licensed emergency power \u2014 direct federal hiring \u201cas we would treat\u2026 war.\u201d'},
 {d:1,q:'Document 2 marks a turning point because it',ch:['made economic security a permanent federal obligation in statute','created the first temporary relief program of the 1930s','transferred welfare responsibility entirely to the states','was repealed before any benefits were ever paid'],ex:'Not emergency relief but a standing system \u2014 the welfare state in law.'},
@@ -1537,7 +1564,7 @@ docs:[
 {id:3,attr:'Adapted from training notes prepared for sit-in volunteers, 1960',txt:'Do not strike back nor curse if abused. Remember: we are not trying to defeat the man across the counter, but the system behind him. Your discipline is the argument.',grp:2,hipp:'Movement pedagogy \u2014 nonviolence as trained strategy, designed to make injustice visible and the protester unimpeachable.'},
 {id:4,attr:'Adapted from testimony of a Mississippi sharecropper on attempting to register to vote, 1964',txt:'The day after I went to the courthouse, the man I worked for told me to take my name off the book or take my family off his land. I had lived there eighteen years.',grp:2,hipp:'Grassroots testimony showing what registration cost \u2014 economic terror as the enforcement arm of disenfranchisement.'},
 {id:5,attr:'Report of the National Advisory Commission on Civil Disorders (Kerner Commission), 1968',txt:'Our nation is moving toward two societies, one black, one white \u2014 separate and unequal\u2026 Discrimination and segregation have long permeated much of American life; they now threaten the future of every American.',grp:3,hipp:'A presidential commission concluding, after the great laws had passed, that the deeper structures remained \u2014 the movement\u2019s unfinished half.'},
-{id:6,attr:'Adapted from an account of housing discrimination in a northern city, 1966',txt:'The ordinance says nothing, and the deed says nothing, but the broker will not show the house, the bank will not write the loan, and the neighbors\u2019 association explains, politely, that we would be happier elsewhere.',grp:3,hipp:'De facto segregation without a statute to strike down \u2014 the northern problem that legal victories did not reach.'}],
+{id:6,attr:'Adapted from an account of housing discrimination in a northern city, 1966',txt:'The ordinance says nothing, and the deed says nothing, but the broker will not show the house, the bank will not write the loan, and the neighbors\u2019 association explains, politely, that we would be happier elsewhere.',grp:3,hipp:'De facto segregation without a statute to strike down \u2014 the northern problem that legal victories did not reach.'},{id:7,attr:'Black voter registration in the eleven southern states, adapted from federal and state records',txt:'Registration figures gathered across the eleven states of the former Confederacy.',grp:1,hipp:'Administrative records rather than movement publicity — they let you separate what changed on paper from what changed at the courthouse door.',viz:{t:'Black adults registered to vote, South',rows:[['1940',3,'about 3%'],['1960',29,'about 29%'],['1964',43,'about 43%'],['1969',62,'about 62%']],note:'The Voting Rights Act passed in 1965.'}}],
 hipp:[
 {d:0,q:'Document 1 was the culmination of which strategy?',ch:['the NAACP\u2019s decades-long litigation campaign against segregation','a congressional program of school construction grants','executive orders desegregating southern universities','state-led efforts to equalize separate schools'],ex:'Marshall\u2019s team built toward Brown case by case for twenty years.'},
 {d:1,q:'Document 2 extended federal power by',ch:['reaching discrimination by private businesses open to the public','desegregating only facilities owned by the government','transferring civil rights enforcement to the states','creating the first constitutional amendment on race'],ex:'Title II reached lunch counters and motels \u2014 private commerce under federal law.'},
@@ -1553,7 +1580,7 @@ docs:[
 {id:3,attr:'Adapted from an opinion column on the \u201cpeace dividend,\u201d 1992',txt:'The enemy has resigned, yet the budget has not noticed. If the Cold War is truly over, let the savings rebuild the schools and bridges at home \u2014 or we shall have won the world and mislaid the country.',grp:2,hipp:'A domestic argument about what victory should purchase \u2014 evidence that primacy\u2019s purpose was contested at home.'},
 {id:4,attr:'Adapted from a commentary on globalization after NAFTA, 1994',txt:'The container ship has replaced the missile as the vessel of American power. But the same treaties that open markets abroad close factories in Ohio, and no one has yet told the workers where they fit in the new order.',grp:2,hipp:'Trade as the new instrument of influence \u2014 and the domestic dislocations that came bundled with it.'},
 {id:5,attr:'Defense expenditure data (adapted)',txt:'U.S. military spending:<br>1985 \u2014 about $580 billion (2011 dollars)<br>1999 \u2014 about $400 billion (2011 dollars), still larger than the next several nations combined',grp:3,hipp:'The budget fell \u2014 and remained the world\u2019s largest by far. Numbers measuring continuity beneath the \u201cdividend.\u201d'},
-{id:6,attr:'Adapted from a historian\u2019s assessment of post\u2013Cold War policy (secondary source)',txt:'The adversary vanished; the architecture did not. The alliances, the bases, the carrier groups, the global commitments \u2014 all outlived the rivalry that justified them, awaiting a new mission that September 2001 would supply.',grp:3,hipp:'A continuity argument \u2014 the machinery of the Cold War persisted, mission pending.'}],
+{id:6,attr:'Adapted from a historian\u2019s assessment of post\u2013Cold War policy (secondary source)',txt:'The adversary vanished; the architecture did not. The alliances, the bases, the carrier groups, the global commitments \u2014 all outlived the rivalry that justified them, awaiting a new mission that September 2001 would supply.',grp:3,hipp:'A continuity argument \u2014 the machinery of the Cold War persisted, mission pending.'},{id:7,attr:'United States active-duty military personnel, adapted from Department of Defense figures',txt:'Department of Defense personnel figures spanning the end of the Cold War.',grp:2,hipp:'The Pentagon’s own count — a concrete test of whether the “peace dividend” was real or rhetorical.',viz:{t:'Active-duty military personnel (millions)',rows:[['1987',217,'about 2.17'],['1993',170,'about 1.70'],['1997',144,'about 1.44'],['2001',138,'about 1.38']],note:'Reductions followed the collapse of the Soviet Union in 1991.'}}],
 hipp:[
 {d:0,q:'The intended audience of Document 1 extends beyond Gorbachev because Reagan is',ch:['performing confrontation for global and domestic publics at the wall','negotiating treaty terms privately with Soviet diplomats','addressing only the West Berlin city government','reading a joint statement agreed with Moscow'],ex:'The gate is a stage \u2014 the demand is addressed to one man and performed for the world.'},
 {d:1,q:'The situation of Document 2 \u2014 delivered amid the Gulf War \u2014 shapes it because Bush presents',ch:['coalition victory as the template for American-led order','American withdrawal from international institutions','a warning against future overseas interventions','the restoration of Soviet power in Eastern Europe'],ex:'1991\u2019s triumph became the model: broad coalitions, American leadership, \u201cnew world order.\u201d'},
@@ -1563,7 +1590,7 @@ hipp:[
 {d:5,q:'The argument of Document 6 is best summarized as',ch:['Cold War structures persisted and found a new mission after 2001','American alliances dissolved when the Soviet Union fell','the United States dismantled its overseas bases in the 1990s','September 2001 created the first American global commitments'],ex:'The architecture outlived the adversary \u2014 continuity awaiting a cause.'}]}];
 /* --- routing --- */
 let DB=null;
-function dbqDocBox(d,n){return '<div class="stimulus" style="margin-top:8px"><p><b>Doc '+n+'.</b> '+d.txt+'</p><span class="src">\u2014 '+esc(d.attr)+'</span></div>';}
+function dbqDocBox(d,n){return '<div class="stimulus" style="margin-top:8px"><p><b>Doc '+n+'.</b> '+d.txt+'</p>'+(d.viz?chartSVG(d.viz):'')+'<span class="src">\u2014 '+esc(d.attr)+'</span></div>';}
 function dbqBack(){return '<div style="height:10px"></div><button class="btn btn-ghost btn-block" id="dbq-back">'+(DB.p?'Back to Study':'Back to Exam tab')+'</button>';}
 function wireBack(){$('#dbq-back').onclick=DB.back;}
 function dbqOpen(tool,pn){
@@ -1651,7 +1678,7 @@ function htDraw(){
 const RS_STEPS=[
 {n:'Contextualization',task:'In 2\u20133 sentences, situate the prompt: what earlier or concurrent developments explain why industrialization surged after 1865?',pts:[['Connected a broader development (Civil War mobilization, railroads, prewar growth) to the prompt \u2014 1 pt']]},
 {n:'Thesis',task:'Write a one-sentence thesis that takes a position on \u201cto what extent\u201d and previews your line of reasoning.',pts:[['Defensible claim with a line of reasoning, not a restatement \u2014 1 pt']]},
-{n:'Evidence from the documents',task:'List which documents support each of your arguments. Aim to use at least four accurately.',pts:[['Used the content of at least TWO documents \u2014 1 pt'],['Supported arguments with at least FOUR documents \u2014 1 pt']]},
+{n:'Evidence from the documents',task:'List which documents support each of your arguments. Aim to use at least four accurately.',pts:[['Described the content of at least THREE documents \u2014 1 pt'],['Supported arguments with at least FOUR documents \u2014 1 pt']]},
 {n:'Outside evidence',task:'Add one specific piece of evidence not in the documents (e.g., Homestead Strike, Sherman Antitrust Act) and explain how it supports your argument.',pts:[['Specific outside evidence, explained \u2014 1 pt']]},
 {n:'Sourcing (HIPP)',task:'For two documents, write one sentence each explaining how point of view, purpose, situation, or audience matters to how you use them.',pts:[['Meaningfully sourced at least TWO documents \u2014 1 pt']]},
 {n:'Complexity',task:'Add a sentence that complicates your argument: where did continuity outweigh change, or which groups experienced the change differently?',pts:[['Demonstrated nuanced, complex understanding \u2014 1 pt']]}];
@@ -1678,6 +1705,274 @@ function drawRS(){
   $('#rs-next').onclick=()=>{RS.i++;drawRS();};
 }
 /* ============ EXAM TAB (format + official materials) ============ */
+/* ===== LEQ LAB ===========================================================
+   The 2027 LEQ gives ONE broad prompt spanning the whole course; the choice
+   moved inside the question. Students now have to decide which units to raid
+   and which evidence they know best. Period-locked LEQ practice in the Study
+   tab teaches the content; this lab rehearses the exam task itself.
+   Steps: prompt -> contextualization -> evidence inventory -> thesis ->
+   timed write -> 6-point rubric self-score.
+========================================================================= */
+const LEQ_LAB=[
+ {id:'dem', pr:'Evaluate the extent to which movements for greater political participation changed American democracy from 1776 to 2000.',
+  rp:'Change and continuity', span:'Periods 3\u20139',
+  ctx:'Good context here reaches back before 1776 \u2014 colonial assemblies, property qualifications, British constitutional argument \u2014 or names the broad arc the prompt sits inside.',
+  ev:[
+   {t:'State constitutions lower or drop property requirements, 1776\u20131820s',p:3,v:'strong',why:'Direct evidence of participation widening, and early enough to anchor the start of the arc.'},
+   {t:'Seneca Falls Declaration of Sentiments, 1848',p:4,v:'strong',why:'A demand for participation from a group excluded by the Jacksonian expansion \u2014 useful for complexity.'},
+   {t:'Free Black men lose the vote in several states, 1820s\u201330s',p:4,v:'strong',why:'The counter-current. Strong essays use this to argue expansion and exclusion advanced together.'},
+   {t:'Fifteenth Amendment, 1870',p:5,v:'strong',why:'Constitutional expansion of the franchise \u2014 and its later nullification supplies the continuity argument.'},
+   {t:'Disfranchisement in the New South: poll taxes, literacy tests, grandfather clauses',p:6,v:'strong',why:'Shows a formal right emptied in practice \u2014 the strongest single piece of continuity evidence available.'},
+   {t:'Seventeenth Amendment (direct election of senators), 1913',p:7,v:'strong',why:'Progressive structural reform, squarely on the prompt.'},
+   {t:'Nineteenth Amendment, 1920',p:7,v:'strong',why:'The largest single enfranchisement in American history.'},
+   {t:'Voting Rights Act of 1965',p:8,v:'strong',why:'Federal enforcement finally matching the Fifteenth Amendment\u2019s promise \u2014 excellent for a change argument.'},
+   {t:'Twenty-Sixth Amendment (vote at eighteen), 1971',p:8,v:'strong',why:'On topic and often forgotten; a good late-arc data point.'},
+   {t:'Andrew Carnegie\u2019s \u201cGospel of Wealth,\u201d 1889',p:6,v:'off',why:'A real document, but about wealth and philanthropy, not political participation. Do not force it.'},
+   {t:'The Marshall Plan, 1948',p:8,v:'off',why:'Foreign policy. Nothing to do with who votes at home.'},
+   {t:'Bacon\u2019s Rebellion, 1676',p:2,v:'partial',why:'Before the prompt window and about colonial grievance, not democratic participation. Usable only as context, not evidence.'}
+  ]},
+ {id:'fed', pr:'Evaluate the extent to which the power of the federal government over the economy changed from 1789 to 2000.',
+  rp:'Causation and change', span:'Periods 3\u20139',
+  ctx:'Reach for the ratification debate itself \u2014 Hamilton\u2019s program, the Bank fight, or the constitutional argument over enumerated powers.',
+  ev:[
+   {t:'Hamilton\u2019s financial program and the First Bank, 1790s',p:3,v:'strong',why:'The founding argument over federal economic power \u2014 ideal opening evidence.'},
+   {t:'Gibbons v. Ogden, 1824',p:4,v:'strong',why:'Establishes broad federal commerce power; a precise legal anchor most students never use.'},
+   {t:'Interstate Commerce Act, 1887, and the Sherman Antitrust Act, 1890',p:6,v:'strong',why:'The first real federal regulation of industry, however weakly enforced at first.'},
+   {t:'Federal Reserve Act, 1913',p:7,v:'strong',why:'Permanent federal control of money and credit.'},
+   {t:'The Wagner Act and Social Security Act, 1935',p:7,v:'strong',why:'The New Deal turn \u2014 the strongest single evidence for large-scale change.'},
+   {t:'Wartime agencies and the War Production Board, 1941\u201345',p:7,v:'strong',why:'Federal direction of the entire economy; useful for arguing the New Deal was not the peak.'},
+   {t:'Interstate Highway Act, 1956',p:8,v:'strong',why:'Enormous federal shaping of the postwar economy under a Republican president \u2014 good complexity.'},
+   {t:'Deregulation of airlines and trucking, late 1970s\u201380s; Reagan tax cuts, 1981',p:9,v:'strong',why:'The reversal. Essays that stop in 1945 miss the argument the prompt is really asking about.'},
+   {t:'Schechter Poultry v. United States, 1935',p:7,v:'strong',why:'The Court checking federal power \u2014 excellent for a limits-and-resistance line of reasoning.'},
+   {t:'The Missouri Compromise, 1820',p:4,v:'off',why:'Sectional politics of slavery, not federal economic power. A common trap.'},
+   {t:'Brown v. Board of Education, 1954',p:8,v:'off',why:'Federal power, yes \u2014 but over schools and civil rights, not the economy.'},
+   {t:'Erie Canal completed, 1825',p:4,v:'partial',why:'State-funded, not federal. Usable only if you are explicitly contrasting state with federal action.'}
+  ]},
+ {id:'imm', pr:'Evaluate the extent to which immigration shaped debates over American national identity from 1800 to 2000.',
+  rp:'Continuity and change', span:'Periods 4\u20139',
+  ctx:'Set up the early republic\u2019s assumptions about who could be a citizen \u2014 the 1790 Naturalization Act limiting naturalization to free white persons is the cleanest move.',
+  ev:[
+   {t:'Irish and German arrivals and the Know-Nothing party, 1840s\u201350s',p:4,v:'strong',why:'The first mass nativist movement \u2014 anchors the beginning of the arc.'},
+   {t:'Chinese Exclusion Act, 1882',p:6,v:'strong',why:'The first federal ban by nationality; race written directly into immigration law.'},
+   {t:'\u201cNew immigration\u201d from southern and eastern Europe, 1880s\u20131914',p:6,v:'strong',why:'The demographic shift that drove the whole restriction debate.'},
+   {t:'Settlement houses and Americanization campaigns',p:6,v:'strong',why:'The assimilationist answer \u2014 lets you show the debate had more than one side.'},
+   {t:'Emergency Quota Act, 1921, and National Origins Act, 1924',p:7,v:'strong',why:'Restriction triumphant, with quotas explicitly designed around national origin.'},
+   {t:'Bracero Program, 1942\u20131964',p:8,v:'strong',why:'Labor wanted while permanent belonging was withheld \u2014 strong complexity evidence.'},
+   {t:'Hart-Celler Immigration Act, 1965',p:8,v:'strong',why:'Ends the quota system and resets the sources of migration; the pivot of the second half.'},
+   {t:'Proposition 187 and 1990s debates over undocumented immigration',p:9,v:'strong',why:'Brings the arc to the end of the prompt window, which many essays fail to do.'},
+   {t:'Immigration Reform and Control Act, 1986',p:9,v:'strong',why:'Amnesty paired with employer sanctions \u2014 a precise, less common example.'},
+   {t:'The Homestead Act, 1862',p:5,v:'partial',why:'Drew immigrants west, but the law is about land policy. Only works with explicit connective reasoning.'},
+   {t:'Sacco and Vanzetti trial, 1920s',p:7,v:'strong',why:'Nativism and anti-radicalism fused in a single episode \u2014 vivid and directly on point.'},
+   {t:'The Gilded Age gold standard debate',p:6,v:'off',why:'Monetary politics. No connection to identity or immigration.'}
+  ]},
+ {id:'world', pr:'Evaluate the extent to which the role of the United States in world affairs changed from 1890 to 2001.',
+  rp:'Causation and change', span:'Periods 6\u20139',
+  ctx:'Open with continental expansion and its close \u2014 the 1890 census declaring the frontier settled, or Manifest Destiny reaching the Pacific \u2014 then turn outward.',
+  ev:[
+   {t:'Spanish-American War and annexation of the Philippines, 1898',p:7,v:'strong',why:'The decisive break into overseas empire \u2014 the natural first body paragraph.'},
+   {t:'Open Door Notes, 1899\u20131900',p:7,v:'strong',why:'Economic influence without territorial conquest; sharpens what kind of power the U.S. sought.'},
+   {t:'Entry into the First World War, 1917, and Senate rejection of the League',p:7,v:'strong',why:'Intervention followed by retreat \u2014 the single best evidence that change was not linear.'},
+   {t:'Neutrality Acts of the 1930s',p:7,v:'strong',why:'The continuity argument. Isolationism was policy, not merely mood.'},
+   {t:'Lend-Lease and entry into the Second World War, 1941',p:7,v:'strong',why:'The permanent turn toward global commitment.'},
+   {t:'Truman Doctrine and Marshall Plan, 1947\u201348',p:8,v:'strong',why:'Containment institutionalized; peacetime alliance as a permanent condition.'},
+   {t:'NATO, 1949, and the permanent overseas basing system',p:8,v:'strong',why:'Structural evidence \u2014 the alliance outlived the adversary, which is a complexity gift.'},
+   {t:'Vietnam and the War Powers Resolution, 1973',p:8,v:'strong',why:'The limits of power and the domestic backlash against it.'},
+   {t:'Persian Gulf War, 1991, and the \u201csole superpower\u201d moment',p:9,v:'strong',why:'Closes the arc inside the prompt window.'},
+   {t:'NAFTA, 1994, and the globalization debate',p:9,v:'strong',why:'Economic rather than military power \u2014 lets you argue the *kind* of role changed, not just the amount.'},
+   {t:'The Dawes Act, 1887',p:6,v:'off',why:'Domestic Native policy. Related to expansion, but not to world affairs.'},
+   {t:'The Second Great Awakening',p:4,v:'off',why:'Outside the window and outside the topic.'}
+  ]}
+];
+
+const LEQ_RUBRIC=[
+ 'Thesis (1 pt): a historically defensible claim that responds to the prompt with a line of reasoning \u2014 not a restatement.',
+ 'Contextualization (1 pt): situates the argument in broader developments before, during, or after the prompt\u2019s window.',
+ 'Evidence (1 pt): supplies at least two specific, relevant pieces of historical evidence.',
+ 'Evidence (+1 pt): uses that evidence to support an argument in response to the prompt.',
+ 'Historical reasoning (1 pt): frames the argument with causation, comparison, or continuity and change.',
+ 'Complexity (1 pt): shows nuance \u2014 corroborate, qualify, or modify; weigh change against continuity; or show groups experienced it differently.'
+];
+
+const LL_STEPS=['Prompt','Context','Evidence','Thesis','Write','Score'];
+let LL=null;
+
+function renderLEQLab(){
+  LL={i:0,set:null,picked:[],checked:false,earned:LEQ_RUBRIC.map(function(){return false;})};
+  DB={p:0,view:'#view-exam',back:renderExamHub};
+  drawLL();
+}
+
+function llHead(){
+  const pts=LL.earned.filter(Boolean).length;
+  return '<div class="quiz-meta"><span class="pill">LEQ Lab</span><span>Step '+(LL.i+1)+' / 6 \u00b7 '+LL_STEPS[LL.i]+'</span>'+
+         '<span class="pill">'+pts+' / 6 pts</span></div>';
+}
+
+function llNav(nextLabel,disabled){
+  return '<div style="display:flex;gap:10px;margin-top:10px">'+
+   '<button class="btn btn-ghost" id="ll-prev"'+(LL.i===0?' disabled':'')+'>\u2190 Back</button>'+
+   '<button class="btn btn-primary" style="flex:1" id="ll-next"'+(disabled?' disabled':'')+'>'+nextLabel+'</button></div>'+
+   '<button class="btn btn-ghost btn-block" id="dbq-back" style="margin-top:10px">Back to Exam tab</button>';
+}
+
+function drawLL(){
+  killTimer();
+  let h=llHead();
+
+  if(LL.i===0){
+    h+='<div class="panel"><h3 class="pf" style="font-size:19px">One prompt, your evidence</h3>'+
+      '<p style="font-size:14px;line-height:1.55;margin-top:6px">On the 2027 exam you no longer choose between three prompts. You get <b>one broad prompt</b> covering a wide span of the course, and the choice moves inside the question: <b>you</b> decide which units to draw on and which evidence you know best.</p>'+
+      '<p style="font-size:13.5px;color:var(--ink2);line-height:1.5;margin-top:8px">Pick one to work through. On exam day you will not get to pick \u2014 so try the one you feel least ready for.</p></div>';
+    LEQ_LAB.forEach(function(s,i){
+      const on=LL.set===i;
+      h+='<button class="btn '+(on?'btn-primary':'btn-ghost')+' btn-block" data-ll-set="'+i+'" style="margin-top:8px;text-align:left;font-size:13.5px;line-height:1.45">'+
+        esc(s.pr)+'<br><span class="mono" style="font-size:10.5px;opacity:.8">'+esc(s.span)+' \u00b7 '+esc(s.rp)+'</span></button>';
+    });
+    h+=llNav('Start \u2192',LL.set===null);
+  }
+
+  else if(LL.i===1){
+    const s=LEQ_LAB[LL.set];
+    h+='<div class="panel"><p style="font-size:13px;color:var(--ink2)"><b>Prompt:</b> '+esc(s.pr)+'</p>'+
+      '<h3 class="pf" style="font-size:19px;margin-top:8px">Contextualization</h3>'+
+      '<p style="font-size:14.5px;line-height:1.5;margin-top:6px">In 2\u20133 sentences, set the scene: what broader development explains why this question matters? Do not just define terms \u2014 connect a development to the prompt.</p>'+
+      '<div class="explain" style="margin-top:8px;font-size:13.5px">'+esc(s.ctx)+'</div>'+
+      '<textarea class="saq-box" rows="4" placeholder="Write your context here (practice only \u2014 not saved)\u2026"></textarea>'+
+      '<label style="display:block;margin-top:8px;font-size:13.5px;line-height:1.45"><input type="checkbox" data-ll-pt="1"'+(LL.earned[1]?' checked':'')+'> '+LEQ_RUBRIC[1]+'</label></div>';
+    h+=llNav('Next \u2192');
+  }
+
+  else if(LL.i===2){
+    const s=LEQ_LAB[LL.set];
+    h+='<div class="panel"><p style="font-size:13px;color:var(--ink2)"><b>Prompt:</b> '+esc(s.pr)+'</p>'+
+      '<h3 class="pf" style="font-size:19px;margin-top:8px">Evidence inventory</h3>'+
+      '<p style="font-size:14.5px;line-height:1.5;margin-top:6px">This is the skill the new format actually tests. Before writing a word, choose the evidence you would use. Aim for <b>four to six</b> pieces drawn from <b>more than one period</b>. Some options below do not belong.</p>';
+    s.ev.forEach(function(e,i){
+      const on=LL.picked.indexOf(i)>-1;
+      h+='<button class="btn '+(on?'btn-navy':'btn-ghost')+' btn-block" data-ll-ev="'+i+'" style="margin-top:6px;text-align:left;font-size:13px;line-height:1.4">'+
+        (on?'\u2713 ':'')+esc(e.t)+' <span class="mono" style="font-size:10px;opacity:.75">P'+e.p+'</span></button>';
+    });
+    h+='<button class="btn btn-primary btn-block" id="ll-check" style="margin-top:10px">Check my inventory</button>';
+    h+='<div id="ll-fb" style="margin-top:8px"></div></div>';
+    h+=llNav('Next \u2192');
+  }
+
+  else if(LL.i===3){
+    const s=LEQ_LAB[LL.set];
+    h+='<div class="panel"><p style="font-size:13px;color:var(--ink2)"><b>Prompt:</b> '+esc(s.pr)+'</p>'+
+      '<h3 class="pf" style="font-size:19px;margin-top:8px">Thesis</h3>'+
+      '<p style="font-size:14.5px;line-height:1.5;margin-top:6px">Take a position on \u201cto what extent\u201d and preview your line of reasoning in one sentence.</p>'+THESIS_BTN+
+      llPickedList(s)+
+      '<textarea class="saq-box" rows="4" placeholder="Although\u2026, therefore\u2026"></textarea>'+
+      '<label style="display:block;margin-top:8px;font-size:13.5px;line-height:1.45"><input type="checkbox" data-ll-pt="0"'+(LL.earned[0]?' checked':'')+'> '+LEQ_RUBRIC[0]+'</label></div>';
+    h+=llNav('Next \u2192');
+  }
+
+  else if(LL.i===4){
+    const s=LEQ_LAB[LL.set];
+    h+='<div class="panel"><p style="font-size:13px;color:var(--ink2)"><b>Prompt:</b> '+esc(s.pr)+'</p>'+
+      '<h3 class="pf" style="font-size:19px;margin-top:8px">Write it \u2014 40 minutes</h3>'+
+      '<p style="font-size:13.5px;color:var(--ink2);line-height:1.5;margin-top:4px">That is the suggested LEQ time on exam day. Nothing here is saved, so write in your own document if you want to keep it.</p>'+
+      '<div style="display:flex;gap:10px;align-items:center;margin-top:8px">'+
+        '<button class="btn btn-navy" id="ll-timer">Start 40:00</button>'+
+        '<span class="mono" id="ll-clock" style="font-size:20px">40:00</span></div>'+
+      llPickedList(s)+
+      '<textarea class="saq-box" rows="10" placeholder="Write your essay\u2026"></textarea></div>';
+    h+=llNav('Score it \u2192');
+  }
+
+  else if(LL.i===5){
+    const s=LEQ_LAB[LL.set];
+    const pts=LL.earned.filter(Boolean).length;
+    h+='<div class="panel"><p style="font-size:13px;color:var(--ink2)"><b>Prompt:</b> '+esc(s.pr)+'</p>'+
+      '<h3 class="pf" style="font-size:19px;margin-top:8px">Score your essay</h3>'+
+      '<p style="font-size:13.5px;color:var(--ink2);line-height:1.5;margin-top:4px">Be honest \u2014 read for what you actually wrote, not what you meant. Each point is earned independently.</p>';
+    LEQ_RUBRIC.forEach(function(r,i){
+      h+='<label style="display:block;margin-top:9px;font-size:13.5px;line-height:1.45"><input type="checkbox" data-ll-pt="'+i+'"'+(LL.earned[i]?' checked':'')+'> '+r+'</label>';
+    });
+    h+='<p class="mono" style="font-size:20px;margin-top:12px"><b>'+pts+' / 6</b></p>'+
+      '<p style="font-size:13px;color:var(--ink2);line-height:1.5;margin-top:4px">'+
+      (pts>=5?'Exam-ready. Try a prompt from a different part of the course.':
+       pts>=3?'Solid core. The points students most often leave behind are contextualization and complexity.':
+       'Work the steps again on the same prompt \u2014 the second pass is where the gain is.')+'</p>'+
+      '<button class="btn btn-primary btn-block" id="ll-again" style="margin-top:10px">Try another prompt</button>'+
+      '<button class="btn btn-ghost btn-block" id="dbq-back" style="margin-top:8px">Back to Exam tab</button></div>';
+    h+='<div class="panel" style="font-size:13.5px;line-height:1.6"><b>Compare against the real thing:</b> official released LEQ prompts, scoring guidelines, and sample student essays are on <a href="https://apcentral.collegeboard.org/courses/ap-united-states-history/exam/past-exam-questions" target="_blank" rel="noopener">AP Central</a>. <button class="btn btn-ghost" data-samples style="margin-top:8px;padding:8px 12px;font-size:13px">See annotated samples</button></div>';
+  }
+
+  $('#view-exam').innerHTML=h;
+  wireLL();
+}
+
+function llPickedList(s){
+  if(!LL.picked.length) return '';
+  let h='<div class="explain" style="margin-top:8px;font-size:13px"><b>Your evidence:</b><br>';
+  LL.picked.forEach(function(i){ h+='\u00b7 '+esc(s.ev[i].t)+'<br>'; });
+  return h+'</div>';
+}
+
+function llCheck(){
+  const s=LEQ_LAB[LL.set];
+  const picked=LL.picked.map(function(i){ return s.ev[i]; });
+  const strong=picked.filter(function(e){ return e.v==='strong'; }).length;
+  const off=picked.filter(function(e){ return e.v==='off'; });
+  const partial=picked.filter(function(e){ return e.v==='partial'; });
+  const periods={};
+  picked.forEach(function(e){ periods[e.p]=1; });
+  const spread=Object.keys(periods).length;
+  let h='<div class="explain" style="line-height:1.55;font-size:13.5px">';
+  h+='<b>'+picked.length+' selected \u00b7 '+strong+' strong \u00b7 '+spread+' period'+(spread===1?'':'s')+'</b><br>';
+  if(picked.length<4) h+='\u2014 Thin. Four to six pieces gives you room to build more than one paragraph.<br>';
+  else if(picked.length>7) h+='\u2014 That is more than you can develop in 40 minutes. Cut to the ones you can explain.<br>';
+  if(spread<2) h+='\u2014 All from one period. A prompt this broad rewards evidence from across the course.<br>';
+  else if(spread>=3) h+='\u2014 Good spread across the course. That is what the broad prompt is asking for.<br>';
+  off.forEach(function(e){ h+='\u2014 <b>Drop it:</b> '+esc(e.t)+'. '+esc(e.why)+'<br>'; });
+  partial.forEach(function(e){ h+='\u2014 <b>Risky:</b> '+esc(e.t)+'. '+esc(e.why)+'<br>'; });
+  if(strong>=4&&!off.length&&spread>=2) h+='\u2014 This is a workable inventory. Now write the thesis that ties it together.<br>';
+  h+='</div>';
+  $('#ll-fb').innerHTML=h;
+  LL.checked=true;
+}
+
+function wireLL(){
+  const back=$('#dbq-back'); if(back) back.onclick=DB.back;
+  $$('#view-exam [data-ll-set]').forEach(function(b){
+    b.onclick=function(){ LL.set=+b.dataset.llSet; LL.picked=[]; drawLL(); };
+  });
+  $$('#view-exam [data-ll-ev]').forEach(function(b){
+    b.onclick=function(){
+      const i=+b.dataset.llEv, at=LL.picked.indexOf(i);
+      if(at>-1) LL.picked.splice(at,1); else LL.picked.push(i);
+      drawLL();
+      if(LL.checked) llCheck();
+    };
+  });
+  const chk=$('#ll-check'); if(chk) chk.onclick=llCheck;
+  $$('#view-exam [data-ll-pt]').forEach(function(c){
+    c.onchange=function(){
+      LL.earned[+c.dataset.llPt]=c.checked;
+      const pill=$$('#view-exam .quiz-meta .pill')[1];
+      if(pill) pill.textContent=LL.earned.filter(Boolean).length+' / 6 pts';
+      if(LL.i===5) drawLL();
+    };
+  });
+  const t=$('#ll-timer');
+  if(t) t.onclick=function(){
+    killTimer(); t.disabled=true; let left=2400;
+    QTIMER=setInterval(function(){
+      const c=$('#ll-clock'); if(!c){ killTimer(); return; }
+      left--;
+      const m=Math.floor(left/60), sec=left%60;
+      c.textContent=m+':'+(sec<10?'0':'')+sec;
+      if(left<=300) c.style.color='var(--rust)';
+      if(left<=0){ killTimer(); c.textContent='Time'; }
+    },1000);
+  };
+  const ag=$('#ll-again'); if(ag) ag.onclick=renderLEQLab;
+  const prev=$('#ll-prev'); if(prev) prev.onclick=function(){ if(LL.i>0){ LL.i--; drawLL(); } };
+  const next=$('#ll-next'); if(next) next.onclick=function(){ if(LL.i<5){ LL.i++; drawLL(); } };
+}
+
 function renderExamHub(){
   let h='<div class="section-title"><h2>The AP Exam</h2><div class="rule"></div></div>';
   h+=cramPanel();
@@ -1686,7 +1981,9 @@ function renderExamHub(){
   '<button class="btn btn-navy btn-block" id="dbq-ht" style="margin-top:8px">1 · HIPP Trainer — sourcing drills</button><div style="height:8px"></div>'+
   '<button class="btn btn-navy btn-block" id="dbq-gg">2 · Grouping Game — docs to arguments</button><div style="height:8px"></div>'+
   '<button class="btn btn-primary btn-block" id="dbq-wb">3 · DBQ Workbench — full document set</button><div style="height:8px"></div>'+
-  '<button class="btn btn-navy btn-block" id="dbq-rs">4 · Rubric Simulator — build the whole essay</button></div>';
+  '<button class="btn btn-navy btn-block" id="dbq-rs">4 · Rubric Simulator — build the whole essay</button></div>'+
+  '<div class="panel"><b>✍️ LEQ Lab</b><p style="font-size:13.5px;color:var(--ink2);line-height:1.5;margin-top:4px">The 2027 LEQ gives one broad prompt spanning the course — you choose the evidence. Six steps: context, evidence inventory, thesis, a timed write, then score yourself against the 6-point rubric.</p>'+
+  '<button class="btn btn-primary btn-block" id="leq-lab" style="margin-top:8px">Open LEQ Lab</button></div>';
   h+='<div class="panel" style="font-size:14.5px;line-height:1.7"><b>Official College Board materials</b><br>'+
   'Real released items are College Board\'s secure, copyrighted materials, so they aren\'t bundled into this app — use them at the source:<br>'+
   '• <a href="https://apcentral.collegeboard.org/courses/ap-united-states-history/exam/past-exam-questions" target="_blank" rel="noopener">Past Exam Questions</a> — every released DBQ, LEQ, and SAQ, with scoring guidelines and real scored student samples<br>'+
@@ -1695,7 +1992,7 @@ function renderExamHub(){
   '• <b>Full practice exams with MCQ sections</b> live in AP Classroom — two official 2027-format practice exams are being released during the 2026–27 school year. Ask your teacher to assign them.</div>';
   h+='<div class="panel" style="font-size:14px;line-height:1.6"><b>Using this app to prep:</b> the Quiz tab drills every CED lesson with instant explanations, missed questions recycle into review, and the Study tab\'s LEQ prompts (with exemplar outlines) practice the new single-prompt format. Save the official practice exams for timed, test-condition runs.</div>';
   $('#view-exam').innerHTML=h;
-  $('#dbq-wb').onclick=renderWorkbench;$('#dbq-gg').onclick=renderGroupGame;
+  $('#dbq-wb').onclick=renderWorkbench;$('#dbq-gg').onclick=renderGroupGame;$('#leq-lab').onclick=renderLEQLab;
   $('#dbq-ht').onclick=renderHIPP;$('#dbq-rs').onclick=renderRubricSim;
   wireCram();
 }
